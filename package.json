@@ -12,6 +12,7 @@
   "dependencies": {
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "joi": "^18.2.3",
     "mongoose": "^9.7.3",
     "opossum": "^10.0.0",
     "uuid": "^14.0.1"

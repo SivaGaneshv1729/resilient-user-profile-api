@@ -1,0 +1,145 @@
+openapi: 3.0.0
+info:
+  title: Resilient User Profile API
+  version: 1.0.0
+  description: Robust API for managing user profiles with external data enrichment and circuit breaker patterns.
+paths:
+  /api/users:
+    post:
+      summary: Create a new user profile
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email]
+              properties:
+                name: { type: string, example: Jane Doe }
+                email: { type: string, format: email, example: jane.doe@example.com }
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '400':
+          description: Invalid input data
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '409':
+          description: User with this email already exists
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/users/{id}:
+    get:
+      summary: Get user profile by ID
+      tags: [Users]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: User found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+    put:
+      summary: Update user profile
+      tags: [Users]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '400':
+          description: Invalid input
+        '404':
+          description: User not found
+
+    delete:
+      summary: Delete user profile
+      tags: [Users]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: User deleted successfully
+        '404':
+          description: User not found
+
+  /api/users/{id}/enriched:
+    get:
+      summary: Get enriched user profile
+      description: Returns user profile merged with data from an external service. Uses Circuit Breaker and Retry for resilience.
+      tags: [Users, Enrichment]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Enriched user profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  name: { type: string }
+                  email: { type: string }
+                  enrichedDataStatus: { type: string, example: available }
+                  recentActivity: { type: array, items: { type: string } }
+                  loyaltyScore: { type: integer }
+        '503':
+          description: Enrichment service unavailable and circuit breaker is open. Fallback response.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        registrationDate: { type: string, format: date-time }
+    ErrorResponse:
+      type: object
+      properties:
+        errorCode: { type: string }
+        message: { type: string }
+        details: { type: array, items: { type: string } }

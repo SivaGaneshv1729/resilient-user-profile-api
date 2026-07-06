@@ -13,7 +13,8 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "mongoose": "^9.7.3",
-    "opossum": "^10.0.0"
+    "opossum": "^10.0.0",
+    "uuid": "^14.0.1"
   },
   "devDependencies": {
     "jest": "^30.4.2",

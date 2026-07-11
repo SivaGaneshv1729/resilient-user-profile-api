@@ -95,4 +95,54 @@ describe('User API Integration Tests', () => {
         });
     });
 
+    describe('GET /api/users/:id/enriched', () => {
+        let userId;
+
+        beforeEach(async () => {
+            const createRes = await request(app).post('/api/users').send({ name: 'Dave', email: 'dave@example.com' });
+            userId = createRes.body.id;
+        });
+
+        it('should return enriched data on success', async () => {
+            global.fetch.mockResolvedValue({
+                ok: true,
+                json: async () => ({ recentActivity: ['login'], loyaltyScore: 100 })
+            });
+
+            const res = await request(app).get(`/api/users/${userId}/enriched`);
+            expect(res.statusCode).toBe(200);
+            expect(res.body.enrichedDataStatus).toBe('available');
+            expect(res.body.loyaltyScore).toBe(100);
+        });
+
+        it('should handle transient errors via retry and then succeed', async () => {
+            global.fetch
+                .mockRejectedValueOnce(new Error('Transient Network Error'))
+                .mockRejectedValueOnce(new Error('Transient Network Error'))
+                .mockResolvedValueOnce({
+                    ok: true,
+                    json: async () => ({ recentActivity: ['login'], loyaltyScore: 200 })
+                });
+
+            const res = await request(app).get(`/api/users/${userId}/enriched`);
+            expect(res.statusCode).toBe(200);
+            expect(res.body.enrichedDataStatus).toBe('available');
+            expect(res.body.loyaltyScore).toBe(200);
+            expect(global.fetch).toHaveBeenCalledTimes(3);
+        }, 10000); 
+
+        it('should open circuit breaker on continuous failures and return fallback', async () => {
+            global.fetch.mockRejectedValue(new Error('Permanent Failure'));
+
+            await request(app).get(`/api/users/${userId}/enriched`);
+            await request(app).get(`/api/users/${userId}/enriched`);
+
+            const res = await request(app).get(`/api/users/${userId}/enriched`);
+            
+            expect(res.statusCode).toBe(200);
+            expect(res.body.enrichedDataStatus).toBe('unavailable');
+            expect(res.body.message).toBeDefined();
+        }, 15000); 
+    });
+
 });

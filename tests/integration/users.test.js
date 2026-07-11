@@ -55,4 +55,31 @@ describe('User API Integration Tests', () => {
         });
     });
 
+    describe('GET /api/users/:id', () => {
+        it('should get an existing user', async () => {
+            const createRes = await request(app).post('/api/users').send({ name: 'Bob', email: 'bob@example.com' });
+            const userId = createRes.body.id;
+
+            const res = await request(app).get(`/api/users/${userId}`);
+            expect(res.statusCode).toBe(200);
+            expect(res.body.name).toBe('Bob');
+        });
+
+        it('should return 404 for non-existent user', async () => {
+            const res = await request(app).get('/api/users/not-found-id');
+            expect(res.statusCode).toBe(404);
+        });
+    });
+
+    describe('PUT /api/users/:id', () => {
+        it('should update an existing user', async () => {
+            const createRes = await request(app).post('/api/users').send({ name: 'Alice', email: 'alice@example.com' });
+            const userId = createRes.body.id;
+
+            const res = await request(app).put(`/api/users/${userId}`).send({ name: 'Alice Updated' });
+            expect(res.statusCode).toBe(200);
+            expect(res.body.name).toBe('Alice Updated');
+        });
+    });
+
 });

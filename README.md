@@ -7,6 +7,19 @@ Modern microservice architectures frequently depend on external APIs for data en
 
 ## Architectural Decisions & Patterns
 
+### System Architecture Flow
+```mermaid
+graph TD
+    Client[Client (Postman/UI)] -->|HTTP Request| API[Express API Router]
+    API --> Controller[User Controller]
+    Controller --> Service[User Service]
+    Service --> UOW[Unit of Work]
+    UOW --> Repo[User Repository]
+    Repo --> DB[(MongoDB)]
+    Service --> CB[Circuit Breaker / Retry]
+    CB --> ExtService[External Mock Service]
+```
+
 ### 1. Repository Pattern
 - **Implementation**: The `IUserRepository` interface abstracts all database logic, implemented concretely by `MongoUserRepository`.
 - **Benefits**: Decouples the business logic (`UserService`) from the Mongoose ODM. This allows for easier unit testing (via mocking the repository) and ensures that migrating to a different database (like PostgreSQL) would not require rewriting the core service layer.
@@ -24,6 +37,35 @@ Modern microservice architectures frequently depend on external APIs for data en
 ### 4. Retry Pattern
 - **Implementation**: Wraps the external API `fetch` call with a custom loop that catches transient network errors and retries up to `RETRY_MAX_ATTEMPTS` times. It utilizes an **exponential backoff** strategy (e.g., 100ms, 200ms, 400ms) to avoid overwhelming a recovering service.
 - **Benefits**: Smooths out temporary network glitches without prematurely tripping the Circuit Breaker.
+
+### Resilience Flow (`GET /api/users/:id/enriched`)
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant API as User API
+    participant CB as Circuit Breaker
+    participant Ext as Mock Service
+
+    C->>API: GET /api/users/:id/enriched
+    API->>CB: Request Enrichment Data
+    
+    alt Circuit is CLOSED (Healthy)
+        CB->>Ext: fetch data
+        alt Success
+            Ext-->>CB: 200 OK (Data)
+            CB-->>API: Data
+            API-->>C: 200 OK (Enriched Profile)
+        else Transient Failure
+            Ext--xCB: Network Error / Timeout
+            CB->>CB: Retry with Exponential Backoff
+            CB-->>API: Fallback Data (If Retries Fail)
+            API-->>C: 200 OK (Fallback Profile)
+        end
+    else Circuit is OPEN (Unhealthy)
+        CB-->>API: Immediate Fallback Data (No external call)
+        API-->>C: 200 OK (Fallback Profile)
+    end
+```
 
 ## Setup Instructions
 

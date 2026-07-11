@@ -110,7 +110,7 @@ paths:
           schema: { type: string }
       responses:
         '200':
-          description: Enriched user profile
+          description: Enriched user profile. If external service is unavailable, returns basic profile with enrichedDataStatus = 'unavailable' and a message.
           content:
             application/json:
               schema:
@@ -122,11 +122,7 @@ paths:
                   enrichedDataStatus: { type: string, example: available }
                   recentActivity: { type: array, items: { type: string } }
                   loyaltyScore: { type: integer }
-        '503':
-          description: Enrichment service unavailable and circuit breaker is open. Fallback response.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
+                  message: { type: string, description: Informative message if enrichment fails. }
 
 components:
   schemas:

@@ -25,13 +25,7 @@ function errorHandler(err, req, res, next) {
         });
     }
 
-    if (err.message.includes('HTTP error! status: 503') || err.message === 'OpenCircuitError') {
-        return res.status(503).json({
-            errorCode: 'SERVICE_UNAVAILABLE',
-            message: 'The external enrichment service is currently unavailable.',
-            details: []
-        });
-    }
+
 
     // Fallback unhandled errors
     res.status(500).json({

@@ -82,4 +82,17 @@ describe('User API Integration Tests', () => {
         });
     });
 
+    describe('DELETE /api/users/:id', () => {
+        it('should delete an existing user', async () => {
+            const createRes = await request(app).post('/api/users').send({ name: 'Charlie', email: 'charlie@example.com' });
+            const userId = createRes.body.id;
+
+            const res = await request(app).delete(`/api/users/${userId}`);
+            expect(res.statusCode).toBe(204);
+
+            const getRes = await request(app).get(`/api/users/${userId}`);
+            expect(getRes.statusCode).toBe(404);
+        });
+    });
+
 });

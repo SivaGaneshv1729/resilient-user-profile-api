@@ -1,11 +1,9 @@
-class UserController {
-    constructor(userService) {
-        this.userService = userService;
-    }
+const UserService = require('../services/UserService');
 
+class UserController {
     async createUser(req, res, next) {
         try {
-            const user = await this.userService.createUser(req.body);
+            const user = await UserService.createUser(req.body);
             res.status(201).json(user);
         } catch (error) {
             next(error);
@@ -14,16 +12,7 @@ class UserController {
 
     async getUser(req, res, next) {
         try {
-            const user = await this.userService.getUser(req.params.id);
-            res.status(200).json(user);
-        } catch (error) {
-            next(error);
-        }
-    }
-
-    async getEnrichedUser(req, res, next) {
-        try {
-            const user = await this.userService.getEnrichedUser(req.params.id);
+            const user = await UserService.getUser(req.params.id);
             res.status(200).json(user);
         } catch (error) {
             next(error);
@@ -32,7 +21,7 @@ class UserController {
 
     async updateUser(req, res, next) {
         try {
-            const user = await this.userService.updateUser(req.params.id, req.body);
+            const user = await UserService.updateUser(req.params.id, req.body);
             res.status(200).json(user);
         } catch (error) {
             next(error);
@@ -41,12 +30,21 @@ class UserController {
 
     async deleteUser(req, res, next) {
         try {
-            await this.userService.deleteUser(req.params.id);
+            await UserService.deleteUser(req.params.id);
             res.status(204).send();
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async getEnrichedUser(req, res, next) {
+        try {
+            const user = await UserService.getEnrichedUser(req.params.id);
+            res.status(200).json(user);
         } catch (error) {
             next(error);
         }
     }
 }
 
-module.exports = UserController;
+module.exports = new UserController();

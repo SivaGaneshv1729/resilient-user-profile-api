@@ -2,36 +2,44 @@ const express = require('express');
 const app = express();
 const port = process.env.MOCK_PORT || 8081;
 
-// Configuration
-const failureRate = parseFloat(process.env.MOCK_SERVICE_FAILURE_RATE || "0.0");
-const delayMs = parseInt(process.env.MOCK_SERVICE_DELAY_MS || "0", 10);
+// Configurable simulated behaviors
+const failureRate = parseFloat(process.env.MOCK_SERVICE_FAILURE_RATE || '0.0');
+const delayMs = parseInt(process.env.MOCK_SERVICE_DELAY_MS || '0', 10);
+
+console.log(`Starting mock service with failureRate=${failureRate}, delayMs=${delayMs}`);
+
+app.use(express.json());
 
 app.get('/health', (req, res) => {
     res.status(200).send('OK');
 });
 
-app.get('/enriched', (req, res) => {
-    const shouldFail = Math.random() < failureRate;
-    
-    setTimeout(() => {
-        if (shouldFail) {
-            // Randomly return 500 or 503
-            const status = Math.random() < 0.5 ? 500 : 503;
-            return res.status(status).json({
-                error: 'Internal Service Error',
-                message: 'Mock service random failure'
-            });
-        }
-        
-        return res.status(200).json({
-            recentActivity: ['login', 'view_profile', 'update_settings'],
-            loyaltyScore: Math.floor(Math.random() * 1000)
-        });
-    }, delayMs);
+app.get('/enrich', async (req, res) => {
+    const userId = req.query.userId;
+    if (!userId) {
+        return res.status(400).json({ error: 'userId is required' });
+    }
+
+    // Simulate delay
+    if (delayMs > 0) {
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+
+    // Simulate failure
+    if (Math.random() < failureRate) {
+        console.log(`[Mock Service] Simulating 503 failure for userId=${userId}`);
+        return res.status(503).json({ error: 'Service Unavailable' });
+    }
+
+    // Success response
+    console.log(`[Mock Service] Returning enriched data for userId=${userId}`);
+    return res.status(200).json({
+        userId,
+        recentActivity: ['login', 'profile_update', 'purchase'],
+        loyaltyScore: Math.floor(Math.random() * 1000)
+    });
 });
 
 app.listen(port, () => {
     console.log(`Mock enrichment service listening on port ${port}`);
-    console.log(`Configured failure rate: ${failureRate}`);
-    console.log(`Configured delay (ms): ${delayMs}`);
 });

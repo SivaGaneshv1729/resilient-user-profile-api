@@ -1,67 +1,65 @@
 const CircuitBreaker = require('opossum');
+const axios = require('axios');
+require('dotenv').config();
+
+const EXTERNAL_URL = process.env.EXTERNAL_SERVICE_URL || 'http://localhost:8081/enrich';
+const TIMEOUT_MS = parseInt(process.env.EXTERNAL_SERVICE_TIMEOUT_MS || '1500', 10);
+const FAILURE_THRESHOLD = parseInt(process.env.CIRCUIT_BREAKER_FAILURE_THRESHOLD || '3', 10);
+const RESET_TIMEOUT_MS = parseInt(process.env.CIRCUIT_BREAKER_RESET_TIMEOUT_MS || '10000', 10);
+
+const RETRY_ATTEMPTS = parseInt(process.env.RETRY_MAX_ATTEMPTS || '3', 10);
+const RETRY_DELAY_MS = parseInt(process.env.RETRY_BASE_DELAY_MS || '100', 10);
+
+// Core function that actually makes the request, with retry logic
+const fetchWithRetry = async (userId) => {
+    let attempt = 0;
+    while (attempt <= RETRY_ATTEMPTS) {
+        try {
+            console.log(`[EnrichmentClient] Fetching data for ${userId}, attempt ${attempt + 1}`);
+            const response = await axios.get(EXTERNAL_URL, {
+                params: { userId },
+                timeout: TIMEOUT_MS
+            });
+            return response.data;
+        } catch (error) {
+            attempt++;
+            if (attempt > RETRY_ATTEMPTS) {
+                console.error(`[EnrichmentClient] Failed after ${RETRY_ATTEMPTS} retries for ${userId}`);
+                throw error; // Let circuit breaker catch this
+            }
+            const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1); // Exponential backoff
+            console.warn(`[EnrichmentClient] Attempt ${attempt} failed, retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+};
+
+const breakerOptions = {
+    timeout: TIMEOUT_MS * (RETRY_ATTEMPTS + 1) + 2000, // Breaker timeout > total retry time
+    errorThresholdPercentage: 50, 
+    volumeThreshold: FAILURE_THRESHOLD, // Minimum number of requests before circuit checks error percentage
+    resetTimeout: RESET_TIMEOUT_MS
+};
+
+const breaker = new CircuitBreaker(fetchWithRetry, breakerOptions);
+
+// Fallback when circuit is open or request fails
+breaker.fallback((userId, err) => {
+    console.log(`[EnrichmentClient] Circuit breaker fallback triggered for ${userId}. Reason: ${err.message}`);
+    return {
+        enrichedDataStatus: 'unavailable',
+        message: 'External service is currently unavailable or circuit is open'
+    };
+});
+
+breaker.on('open', () => console.error('[EnrichmentClient] CIRCUIT BREAKER OPENED'));
+breaker.on('halfOpen', () => console.warn('[EnrichmentClient] CIRCUIT BREAKER HALF-OPEN'));
+breaker.on('close', () => console.log('[EnrichmentClient] CIRCUIT BREAKER CLOSED'));
 
 class EnrichmentClient {
-    constructor() {
-        this.url = process.env.EXTERNAL_SERVICE_URL || 'http://localhost:8081/enriched';
-        this.timeoutMs = parseInt(process.env.EXTERNAL_SERVICE_TIMEOUT_MS || "1500", 10);
-        this.maxAttempts = parseInt(process.env.RETRY_MAX_ATTEMPTS || "3", 10);
-        this.baseDelayMs = parseInt(process.env.RETRY_BASE_DELAY_MS || "100", 10);
-
-        const breakerOptions = {
-            timeout: this.timeoutMs,
-            errorThresholdPercentage: 50, 
-            resetTimeout: parseInt(process.env.CIRCUIT_BREAKER_RESET_TIMEOUT_MS || "30000", 10),
-            volumeThreshold: parseInt(process.env.CIRCUIT_BREAKER_FAILURE_THRESHOLD || "5", 10)
-        };
-
-        this.breaker = new CircuitBreaker(this._fetchWithRetry.bind(this), breakerOptions);
-
-        this.breaker.fallback(() => {
-            return {
-                enrichedDataStatus: 'unavailable',
-                message: 'Enrichment service is currently unavailable.'
-            };
-        });
-        
-        this.breaker.on('open', () => console.warn('Circuit breaker opened.'));
-        this.breaker.on('halfOpen', () => console.info('Circuit breaker half-open.'));
-        this.breaker.on('close', () => console.info('Circuit breaker closed.'));
-    }
-
     async getEnrichmentData(userId) {
-        return await this.breaker.fire(userId);
-    }
-
-    async _fetchWithRetry(userId) {
-        let attempt = 0;
-        while (attempt < this.maxAttempts) {
-            try {
-                const response = await fetch(`${this.url}?userId=${userId}`, {
-                    method: 'GET',
-                    headers: { 'Content-Type': 'application/json' },
-                    signal: AbortSignal.timeout(this.timeoutMs)
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const data = await response.json();
-                return {
-                    enrichedDataStatus: 'available',
-                    ...data
-                };
-            } catch (error) {
-                attempt++;
-                if (attempt >= this.maxAttempts) {
-                    throw error;
-                }
-                const delay = this.baseDelayMs * Math.pow(2, attempt - 1);
-                console.warn(`Retry attempt ${attempt} for user ${userId}. Delaying ${delay}ms`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-            }
-        }
+        return await breaker.fire(userId);
     }
 }
 
-module.exports = EnrichmentClient;
+module.exports = new EnrichmentClient();

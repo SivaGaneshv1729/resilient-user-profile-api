@@ -1,38 +1,22 @@
-function errorHandler(err, req, res, next) {
-    console.error(err);
+const errorHandler = (err, req, res, next) => {
+    console.error(`[Error] ${err.message}`);
+    
+    let status = err.status || 500;
+    let errorCode = 'INTERNAL_SERVER_ERROR';
+    let message = err.message || 'An unexpected error occurred';
+    let details = [];
 
-    if (err.isJoi) {
-        return res.status(400).json({
-            errorCode: 'INVALID_INPUT',
-            message: 'Validation failed',
-            details: err.details.map(detail => detail.message)
-        });
+    if (status === 404) {
+        errorCode = 'RESOURCE_NOT_FOUND';
+    } else if (status === 409) {
+        errorCode = 'RESOURCE_CONFLICT';
     }
 
-    if (err.message === 'RESOURCE_NOT_FOUND') {
-        return res.status(404).json({
-            errorCode: 'RESOURCE_NOT_FOUND',
-            message: 'The requested user could not be found.',
-            details: []
-        });
-    }
-
-    if (err.message === 'EMAIL_DUPLICATE') {
-        return res.status(409).json({
-            errorCode: 'EMAIL_DUPLICATE',
-            message: 'A user with this email already exists.',
-            details: []
-        });
-    }
-
-
-
-    // Fallback unhandled errors
-    res.status(500).json({
-        errorCode: 'INTERNAL_SERVER_ERROR',
-        message: 'An unexpected error occurred.',
-        details: []
+    res.status(status).json({
+        errorCode,
+        message,
+        details
     });
-}
+};
 
 module.exports = errorHandler;
